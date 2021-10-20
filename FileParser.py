@@ -51,28 +51,20 @@ def parse_df(seq_schema_dict, in_seq_df):
         end_pos = split_positions[1]
         in_seq_df_parse = in_seq_df_parse.withColumn(column, F.substring("value", start_pos, end_pos))
         in_seq_df_parse = in_seq_df_parse.drop("value")
-        return in_seq_df_parse
+
+    return in_seq_df_parse
 
 
-try:
-    input_file_df = spark.read.text(input_file_path).repartition(num_partitions)\
-        .filter(F.substring(F.col("value"), 2, 4) == "APR").cache()
 
-    seq001_df = input_file_df.filter(F.substring(F.col("value"), 3, 6) == "001")
-    seq002_df = input_file_df.filter(F.substring(F.col("value"), 3, 6) == "002")
-    seq003_df = input_file_df.filter(F.substring(F.col("value"), 3, 6) == "003")
-    seq004_df = input_file_df.filter(F.substring(F.col("value"), 3, 6) == "004")
-    seq005_df = input_file_df.filter(F.substring(F.col("value"), 3, 6) == "005")
-    seq006_df = input_file_df.filter(F.substring(F.col("value"), 3, 6) == "006")
-    seq007_df = input_file_df.filter(F.substring(F.col("value"), 3, 6) == "007")
-    seq008_df = input_file_df.filter(F.substring(F.col("value"), 3, 6) == "008")
-    seq009_df = input_file_df.filter(F.substring(F.col("value"), 3, 6) == "009")
-    seq010_df = input_file_df.filter(F.substring(F.col("value"), 3, 6) == "0010")
+config_dict = load_config(schema_file_path)
 
-    write_output(seq010_df, output_file_path + "/" + str(currentDT) + "/SEQ001")
-    write_output(seq010_df, output_file_path + "/" + str(currentDT) + "/SEQ002")
-    write_output(seq010_df, output_file_path + "/" + str(currentDT) + "/SEQ003")
+input_file_df = spark.read.text(input_file_path).repartition(num_partitions)\
+    .filter(F.substring(F.col("value"), 2, 4) == "APR").cache()
 
-except Exception as ex:
-    print("Parsing failed with error: " + str(ex))
-    raise ex
+seq001_df = parse_df(config_dict.get("SEQ001"), input_file_df.filter(F.substring(F.col("value"), 3, 6) == "001"))
+seq002_df = parse_df(config_dict.get("SEQ002"), input_file_df.filter(F.substring(F.col("value"), 3, 6) == "002"))
+seq003_df = parse_df(config_dict.get("SEQ003"), input_file_df.filter(F.substring(F.col("value"), 3, 6) == "003"))
+
+write_output(seq001_df, output_file_path + "/" + str(currentDT) + "/SEQ001")
+write_output(seq002_df, output_file_path + "/" + str(currentDT) + "/SEQ002")
+write_output(seq003_df, output_file_path + "/" + str(currentDT) + "/SEQ003")
