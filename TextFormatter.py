@@ -61,19 +61,42 @@ def parse_df(seq_schema_dict, in_seq_df):
     return in_seq_df_parse
 
 
+def add_index(df, offset=1, colName="index"):
+    new_schema = StructType(
+        [StructField(colName, LongType(), True)]
+        + df.schema.fields
+    )
+    zipped_rdd = df.rdd.zipWithIndex()
+
+    new_rdd = zipped_rdd.map(lambda args: (
+        [args[1] + offset] + list(args[0])))
+    df = spark.createDataFrame(new_rdd, new_schema)
+    return df
+
+
+def build_data(in_df, seq_num, seq_value, start_pos, end_pos, schema):
+    df = add_index(parse_df(schema.get(seq_num), in_df.filter(F.substring("value", start_pos, end_pos) == seq_value)))
+    return df
+
+
 config_dict = load_config(schema_file_path)
 
 input_file_df = spark.read.text(input_file_path).repartition(num_partitions)\
     .filter(F.substring("value", 1, 3) == detail_rec_identifier).cache()
 
-record_type_51_52 = input_file_df.filter(F.substring("value", 3, 2).isin(*["51", "52"]))
+sequences = ["SEQ01", "SEQ02"]
 
-seq1736_df = parse_df(config_dict.get(schema_dict.get("17-36")), input_file_df.filter(
-    F.substring("value", 4, 3) == "001"))
-#seq002_df = parse_df(config_dict.get("SEQ002"), input_file_df.filter(
-#    F.substring(F.col("value"), 4, 3) == "002"))
+data_dict = {}
+for seq in sequences:
+    data_dict[seq] = build_data(input_file_df, seq, seq[2:], 2, 4, schema_dict)
 
-write_output(seq1736_df, output_file_path + "/" + str(currentDT) + "/SEQ001")
-#write_output(seq002_df, output_file_path + "/" + str(currentDT) + "/SEQ002")
+
+final_df = data_dict["SEQ01"]\
+    .join(data_dict["SEQ02"], ["index"], "outer")\
+    .join(data_dict["SEQ03"], ["index"], "outer")\
+    .join(data_dict["SEQ04"], ["index"], "outer")\
+    .drop("index")
+
+write_output(final_df, output_file_path + "/" + str(currentDT) + "/MERGED")
 
 
