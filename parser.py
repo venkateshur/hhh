@@ -49,14 +49,15 @@ def get_schema(schema_dict, req_seq):
     return schema_dict.get(req_seq)
 
 
-def parse_df(seq_schema_dict, in_seq_df):
+def parse_data(seq_schema_dict, in_seq_df):
     in_seq_df_parse = in_seq_df
     for column in seq_schema_dict:
         split_positions = seq_schema_dict[column].split("-")
         start_pos = int(split_positions[0])
         length = int(split_positions[1])
-        in_seq_df_parse = in_seq_df_parse.withColumn(
-            column, F.substring("value", start_pos, length))
+        in_seq_df_parse = in_seq_df_parse.withColumn(column, F.substring("value", start_pos, length))
+
+    return in_seq_df_parse
 
 
 def add_index(df, offset=1, colName="index"):
@@ -74,8 +75,11 @@ def add_index(df, offset=1, colName="index"):
 
 def build_data(in_df, seq_num, seq_value, start_pos, length, schema):
     seq_schema = schema.get(str(seq_num))
-    df = add_index(parse_df(seq_schema, in_df.filter(
-        F.substring("value", start_pos, length) == seq_value)))
+    parsed_df = parse_data(seq_schema, in_df.filter(F.substring("value", start_pos, length) == seq_value))
+    df = add_index(parsed_df)
+    if not "Sequence_Nbr" in df.columns:
+        df = df.withColumn("Sequence_Nbr", F.lit(""))
+
     return df
 
 
@@ -102,15 +106,17 @@ def build_missing_columns(df, all_columns):
     return df
 
 
-def get_data(schema_dict, sequences):
-    seq_dict = {}
-    input_file_df = input_file_df_raw.filter(
-        F.substring("value", 2, 2).isin(*sequences))
-
-    for seq in sequences:
-        seq_dict[seq] = build_data(
-            input_file_df, seq, str(seq), 4, 2, schema_dict)
-    return seq_dict
+def get_data(schema_dict):
+    record_type_result_dict = {}
+    for record_type in schema_dict:
+        seq_position = seq_position_dict[record_type]
+        sequences = rect_type_seq_dict[record_type]
+        seq_dict = {}
+        for seq in sequences:
+            input_file_recordy_type_df = input_file_df_raw.filter(F.substring("value", 1, 3) == str(record_types).strip())
+            seq_dict[seq] = build_data(input_file_recordy_type_df, seq, str(seq), seq_position[0], seq_position[1], schema_dict)
+        record_type_result_dict[record_type] = seq_dict
+    return record_type_result_dict
 
 
 def final_data(data_dict, sequences, catageory):
@@ -133,7 +139,8 @@ def final_data(data_dict, sequences, catageory):
                 df = df.toDF(*columns_with_seq)
                 # df_dict[sequence] = df
                 dfs.append(df)
-    final_df = reduce(lambda x, y: x.union(y), dfs).sort("RecordType", "index").withColumn("load_id", F.col("index")).drop("index")
+    final_df = reduce(lambda x, y: x.union(y), dfs).sort("RecordType", "index").withColumn("load_id",
+                                                                                           F.col("index")).drop("index")
 
     return final_df
 
@@ -144,10 +151,5 @@ all_columns = build_all_columns(schema_dict)
 input_file_df_raw = spark.read.text(input_file_path).repartition(num_partitions) \
     .filter(F.substring("value", 2, 2).isin(*detail_rec_identifier)).withColumn("file_name",
                                                                                 F.input_file_name()).cache()
-file_name = [str(row.file_name) for row in input_file_df_raw.collect()][0].split("/").pop()
 
-sequences = determine_record_type(file_name)
-
-data_dict = get_data(schema_dict, sequences)
-
-
+data_dict = get_data(schema_dict)
