@@ -39,9 +39,9 @@ def get_encrypted_df(spark, col_to_encrypt, api_key):
         max_count = get_entities_count(CLIENT_IDS_MAX_COUNT_END_POINT_URL, params, headers)
 
     if col_to_encrypt == 'repid':
-        ALL_TOKENS_ENDPOINT_URL = RAPID_IDS_END_POINT_URL
+        ENDPOINT_URL = RAPID_IDS_END_POINT_URL
     else:
-        ALL_TOKENS_ENDPOINT_URL = CLIENT_IDS_END_POINT_URL
+        ENDPOINT_URL = CLIENT_IDS_END_POINT_URL
 
     responses_list = []
     if max_count < 100:
@@ -50,10 +50,10 @@ def get_encrypted_df(spark, col_to_encrypt, api_key):
         incremental_count = 0
         for offset in range(0, max_count, 100):
             incremental_count = offset + incremental_count
-            responses_list.append(get_call(ALL_TOKENS_ENDPOINT_URL + "/ofsset=" + offset, params, headers))
+            responses_list.append(get_call(ENDPOINT_URL + "/ofsset=" + offset, params, headers))
 
         if (incremental_count < max_count) and (incremental_count + 100 <= max_count):
-            responses_list.append(get_call(ALL_TOKENS_ENDPOINT_URL + "/ofsset=" + offset, params, headers))
+            responses_list.append(get_call(ENDPOINT_URL + "/ofsset=" + offset, params, headers))
 
     if col_to_encrypt == 'repid':
         schema = ['REP_ID', 'TokenizedRepID']
