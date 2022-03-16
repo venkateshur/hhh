@@ -61,6 +61,6 @@ def get_encrypted_df(spark, col_to_encrypt, api_key):
     if col_to_encrypt == 'clientid':
         schema = ['CLIENT_ID', 'TokenizedClientID']
 
-    encrypted_df = spark.createDataFrame(data=flatten(responses_list), schema=schema)
+    encrypted_df = spark.createDataFrame(data=flatten(responses_list), schema=['key', 'value']).toDF(*schema)
 
     return encrypted_df
