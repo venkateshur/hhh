@@ -12,7 +12,7 @@ def get_call(end_point, params, headers):
         no_of_retries -= 1
 
     if response.status_code != 200:
-        raise Exception("Unable to fetch the encrypted values for repids. Error is {response.json()}")
+        raise Exception("Unable to fetch the encrypted values. Error is {response.json()}")
 
     return response.json()
 
