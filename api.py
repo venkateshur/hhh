@@ -4,6 +4,9 @@ import json
 import requests
 
 
+def flatten(t):
+    return [item for sublist in t for item in sublist]
+
 def get_call(end_point, params, headers):
     response = requests.get(end_point, params=params, headers=headers, verify=False)
     no_of_retries = 3
@@ -58,6 +61,6 @@ def get_encrypted_df(spark, col_to_encrypt, api_key):
     if col_to_encrypt == 'clientid':
         schema = ['CLIENT_ID', 'TokenizedClientID']
 
-    encrypted_df = spark.createDataFrame(data=response.json(), schema=schema)
+    encrypted_df = spark.createDataFrame(data=flatten(responses_list), schema=schema)
 
     return encrypted_df
