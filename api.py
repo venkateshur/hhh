@@ -46,7 +46,7 @@ def get_encrypted_df(spark, col_to_encrypt, api_key):
     else:
         incremental_count = 0
         for offset in range(0, max_count, 100):
-            incremental_count = i + 1
+            incremental_count = offset + incremental_count
             responses_list.append(get_call(ALL_TOKENS_ENDPOINT_URL + "/ofsset=" + offset, params, headers))
 
         if (incremental_count < max_count) and (incremental_count + 100 <= max_count):
