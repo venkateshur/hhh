@@ -56,3 +56,33 @@ def flattenRecursive(df: DataFrame): DataFrame = {
     df
   }
   
+  
+  //New method
+  def flattenIterative(dfGlobal: DataFrame): DataFrame = {
+		var df: DataFrame = dfGlobal
+		var schema: StructType = df.schema
+		var flag = true //allow first loop
+		 while(flag){
+			flag = false //reset every loop
+			schema.fields.foreach {
+				elem =>
+				elem.dataType match {
+				case arrayType: ArrayType => //println("flatten array")
+					flag = true
+					df = df.withColumn(elem.name + "_temp", explode_outer(col(elem.name)))
+								 .drop(col(elem.name))
+								 .withColumnRenamed(elem.name + "_temp", elem.name)
+				case structType: StructType => //println("flatten struct")
+					flag = true
+					structType.fields.foreach {
+						inElem =>
+						df = df.withColumn(elem.name + "_" + inElem.name, col(elem.name + "." + inElem.name))
+					}
+					df = df.drop(col(elem.name))
+				case _ => //println("other type")
+				}
+			}
+			schema = df.schema
+		}
+		return df
+	}
