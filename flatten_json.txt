@@ -85,3 +85,51 @@ def flattenRecursive(df: DataFrame): DataFrame = {
     }
     df
   }
+
+# call first this method and later call flattenArrayRecursive with result df got from flattenStructRecursive
+def flattenStructRecursive(inDf: DataFrame): DataFrame = {
+    import org.apache.spark.storage.StorageLevel
+    val df = inDf.repartition(200).persist(StorageLevel.MEMORY_AND_DISK)
+    df.show(5, false)
+    val fields = df.schema.fields
+    val fieldNames = fields.map(x => x.name)
+    for(i <- fields.indices){
+      val field = fields(i)
+      val fieldtype = field.dataType
+      val fieldName = field.name
+      fieldtype match {
+        case structType: StructType => //println("flatten struct")
+          val newfieldNames = fieldNames.filter(_!= fieldName) ++
+            structType.fieldNames.map(childname => fieldName.concat(".").concat(childname)
+              .concat(" as ")
+              .concat(fieldName).concat("_").concat(childname))
+          val explodedf = df.selectExpr(newfieldNames:_*)
+          return flattenRecursive(explodedf)
+        case _ => //println("other type")
+      }
+    }
+    df
+  }
+
+
+  def flattenArrayRecursive(inDf: DataFrame): DataFrame = {
+    import org.apache.spark.storage.StorageLevel
+    val df = inDf.repartition(200).persist(StorageLevel.MEMORY_AND_DISK)
+    df.show(5, false)
+    val fields = df.schema.fields
+    val fieldNames = fields.map(x => x.name)
+    for(i <- fields.indices){
+      val field = fields(i)
+      val fieldtype = field.dataType
+      val fieldName = field.name
+      fieldtype match {
+        case _: ArrayType => //println("flatten array")
+          val newfieldNames = fieldNames.filter(_!=fieldName) ++ Array("explode_outer(".concat(fieldName).concat(") as ").concat(fieldName))
+          val explodedDf = df.selectExpr(newfieldNames:_*)
+          return flattenRecursive(explodedDf)
+        case _ => //println("other type")
+      }
+    }
+    df
+  }
+  
