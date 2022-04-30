@@ -41,3 +41,18 @@ implicit class DFHelpers(df: DataFrame) {
     }
 }
 
+//TO Run Above function
+
+
+
+import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.types._
+import scala.annotation.tailrec
+import scala.util.Try
+defined class DFHelpers
+
+
+//df ==> your data frame
+df.explodeColumns
+
