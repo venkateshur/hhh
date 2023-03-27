@@ -1,0 +1,755 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Data Cleanroom powered by Snowflake",
+    "description": "This is a sample Data cleanroom API creation.",
+    "termsOfService": "http://samsungads.com/datacleanroomservice/termsofservice",
+    "contact": {
+      "email": "kr.saurabh09@samsung.com"
+    },
+    "version": "1.0.11"
+  },
+  "servers": [
+    {
+      "url": "<yet to be created>"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Advertiser-Onboarding",
+      "description": "Everything about advertisers"
+    },
+    {
+      "name": "Dataset-Onboarding",
+      "description": "Info about Advertiser and Samsungs Data"
+    },
+    {
+      "name": "Data-Activation/Insights",
+      "description": "Operations about data cleanroom"
+    }
+  ],
+  "paths": {
+    "/advertiser": {
+      "put": {
+        "tags": [
+          "Advertiser-Onboarding"
+        ],
+        "summary": "Update an existing Advertiser",
+        "description": "Update an existing Advertiser by Id",
+        "operationId": "updateAdvertiser",
+        "requestBody": {
+          "description": "Update an existent Advertiser in Data Cleanroom",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/advertiser_registration_update"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/advertiser_registration_response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID supplied"
+          },
+          "404": {
+            "description": "Advertiser not found"
+          },
+          "405": {
+            "description": "Validation exception"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Advertiser-Onboarding"
+        ],
+        "summary": "Add a new Advertiser to Data Cleanroom",
+        "description": "Add a new Advertiser to Data Cleanroom",
+        "operationId": "addAdvertiser",
+        "requestBody": {
+          "description": "Create a new Advertiser in the Data Cleanroom",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/advertiser_registration_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/advertiser_registration_response"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Invalid input"
+          }
+        }
+      }
+    },
+    "/advertiser/{advertiserID}": {
+      "get": {
+        "tags": [
+          "Advertiser-Onboarding"
+        ],
+        "summary": "Find Advertiser by ID",
+        "description": "Returns a single Advertiser",
+        "operationId": "getAdvertiserById",
+        "parameters": [
+          {
+            "name": "advertiserID",
+            "in": "path",
+            "description": "ID of advertiser to return",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/advertiser_registration_response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID supplied"
+          },
+          "404": {
+            "description": "advertiser not found"
+          }
+        }
+      }
+    },
+    "/advertiser/dataset/{advertiserID}": {
+      "get": {
+        "tags": [
+          "Dataset-Onboarding"
+        ],
+        "summary": "Returns shareable and joining key columns for the specific onboarded advertiser dataset",
+        "description": "Returns shareable and  joining key columns for the onboarded advertiser dataset",
+        "operationId": "getadvertiserschema",
+        "parameters": [
+          {
+            "name": "advertiserID",
+            "in": "path",
+            "description": "ID of advertiser",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/advertiser_info_response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID supplied"
+          },
+          "404": {
+            "description": "Advertiser not found"
+          }
+        }
+      }
+    },
+    "/advertiser/dataset": {
+      "post": {
+        "tags": [
+          "Dataset-Onboarding"
+        ],
+        "summary": "Add schema for a Advertiser to Data Cleanroom",
+        "description": "Add schema for a Advertiser to Data Cleanroom",
+        "operationId": "addAdvertiserSchema",
+        "requestBody": {
+          "description": "Create a new Advertiser's schema in the Data Cleanroom",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/advertiser_info_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/advertiser_info_response"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Invalid input"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Dataset-Onboarding"
+        ],
+        "summary": "Update schema for a Advertiser to Data Cleanroom",
+        "description": "Update schema for a Advertiser to Data Cleanroom",
+        "operationId": "updateAdvertiserSchema",
+        "requestBody": {
+          "description": "Update an existent Advertiser's schema in Data Cleanroom",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/advertiser_info_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/advertiser_info_response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID supplied"
+          },
+          "404": {
+            "description": "Advertiser not found"
+          },
+          "405": {
+            "description": "Validation exception"
+          }
+        }
+      }
+    },
+    "/samsung/dataset": {
+      "get": {
+        "tags": [
+          "Dataset-Onboarding"
+        ],
+        "summary": "Returns key column for the samsung's dataset",
+        "description": "Returns key column for samsung's dataset",
+        "operationId": "getsamsungschema",
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/samsung_info_response"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Dataset-Onboarding"
+        ],
+        "summary": "Add schema for a samsung data  to Data Cleanroom",
+        "description": "Add schema for a samsung data  to Data Cleanroom",
+        "operationId": "addsamsungSchema",
+        "requestBody": {
+          "description": "Create a new samsung's data schema in the Data Cleanroom",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/samsung_info_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/samsung_info_response"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Invalid input"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Dataset-Onboarding"
+        ],
+        "summary": "Update schema for samsung data to Data Cleanroom",
+        "description": "Update schema for samsung data to Data Cleanroom",
+        "operationId": "updateSamsungSchema",
+        "requestBody": {
+          "description": "Update an Samsung schema in Data Cleanroom",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/samsung_info_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/samsung_info_response"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Validation exception"
+          }
+        }
+      }
+    },
+    "/activation": {
+      "post": {
+        "tags": [
+          "Data-Activation/Insights"
+        ],
+        "summary": "Send Request for  Data Activation",
+        "description": "Send Request for  Data Activation",
+        "operationId": "requestActivation",
+        "requestBody": {
+          "description": "Requests for data activation for the coressponding advertiser in the Data Cleanroom",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/activation_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/activation_response"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Invalid input"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Data-Activation/Insights"
+        ],
+        "summary": "Get the status of the activation request",
+        "description": "Returns the status of the activation request , along with the data path",
+        "operationId": "getActivationStatus",
+        "parameters": [
+          {
+            "name": "activationRequestId",
+            "in": "query",
+            "description": "insight request id to return",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/activation_response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID supplied"
+          },
+          "404": {
+            "description": "request not found"
+          }
+        }
+      }
+    },
+    "/insight": {
+      "get": {
+        "tags": [
+          "Data-Activation/Insights"
+        ],
+        "summary": "Get the status of the insight request",
+        "description": "Returns the status of the insight request created for an advertiser, along with the data path",
+        "operationId": "getInsightstatus",
+        "parameters": [
+          {
+            "name": "insightRequestId",
+            "in": "query",
+            "description": "insight request id to return",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/insight_response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ID supplied"
+          },
+          "404": {
+            "description": "request not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Data-Activation/Insights"
+        ],
+        "summary": "Send Request for  to generate Data Insight for a corresponding advertiser",
+        "description": "Send Request for  to generate Data Insight for a corresponding advertiser",
+        "operationId": "requestInsight",
+        "requestBody": {
+          "description": "Requests for data insight for the coressponding advertiser in the Data Cleanroom",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/insight_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/insight_response"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Invalid input"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "advertiser_registration_request": {
+        "type": "object",
+        "properties": {
+          "advertiserName": {
+            "type": "string"
+          },
+          "advertiserSnowflakeId": {
+            "type": "string"
+          },
+          "advertiserStatus": {
+            "type": "string"
+          }
+        }
+      },
+      "advertiser_registration_update": {
+        "type": "object",
+        "properties": {
+          "advertiserID": {
+            "type": "integer"
+          },
+          "advertiserName": {
+            "type": "string"
+          },
+          "advertiserSnowflakeId": {
+            "type": "string"
+          },
+          "advertiserStatus": {
+            "type": "string"
+          },
+          "advertiserEnrolledDate": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "advertiser_registration_response": {
+        "type": "object",
+        "properties": {
+          "advertiserID": {
+            "type": "integer"
+          },
+          "advertiserName": {
+            "type": "string"
+          },
+          "advertiserSnowflakeId": {
+            "type": "string"
+          },
+          "advertiserStatus": {
+            "type": "string",
+            "example": "active",
+            "enum": [
+              "active",
+              "inactive"
+            ]
+          },
+          "advertiserEnrolledDate": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "advertiser_info_request": {
+        "type": "object",
+        "properties": {
+          "advertiserID": {
+            "type": "integer"
+          },
+          "dataset_name": {
+            "type": "string"
+          },
+          "database_name": {
+            "type": "string"
+          },
+          "table_name": {
+            "type": "string"
+          },
+          "matchKeysAvailable": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "advertiser_info_response": {
+        "type": "object",
+        "properties": {
+          "advertiserID": {
+            "type": "integer"
+          },
+          "dataset_name": {
+            "type": "string"
+          },
+          "database_name": {
+            "type": "string"
+          },
+          "table_name": {
+            "type": "string"
+          },
+          "matchKeysAvailable": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "datasetId": {
+            "type": "integer"
+          }
+        }
+      },
+      "samsung_info_request": {
+        "type": "object",
+        "properties": {
+          "dataset_name": {
+            "type": "string"
+          },
+          "database_name": {
+            "type": "string"
+          },
+          "table_name": {
+            "type": "string"
+          },
+          "matchKeysAvailable": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tifaColumn": {
+            "type": "string"
+          }
+        }
+      },
+      "samsung_info_response": {
+        "type": "object",
+        "properties": {
+          "dataset_name": {
+            "type": "string"
+          },
+          "database_name": {
+            "type": "string"
+          },
+          "table_name": {
+            "type": "string"
+          },
+          "matchKeysAvailable": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tifaColumn": {
+            "type": "string"
+          }
+        }
+      },
+      "insight_request": {
+        "type": "object",
+        "properties": {
+          "advertiser_id": {
+            "type": "string"
+          },
+          "dataset_id": {
+            "type": "string"
+          },
+          "matchOutputTableName": {
+            "type": "string"
+          },
+          "insightFileLocation": {
+            "type": "string"
+          }
+        }
+      },
+      "insight_response": {
+        "type": "object",
+        "properties": {
+          "advertiser_id": {
+            "type": "string"
+          },
+          "dataset_id": {
+            "type": "string"
+          },
+          "matchOutputTableName": {
+            "type": "string"
+          },
+          "insightFileLocation": {
+            "type": "string"
+          },
+          "executionStatus": {
+            "type": "string",
+            "example": "completed",
+            "enum": [
+              "inProgress",
+              "completed",
+              "denied"
+            ]
+          },
+          "insightRequestId": {
+            "type": "string"
+          }
+        }
+      },
+      "activation_request": {
+        "type": "object",
+        "properties": {
+          "advertiser_id": {
+            "type": "string"
+          },
+          "dataset_id": {
+            "type": "string"
+          },
+          "matchOutputTableName": {
+            "type": "string"
+          },
+          "activationFileLocation": {
+            "type": "string"
+          }
+        }
+      },
+      "activation_response": {
+        "type": "object",
+        "properties": {
+          "advertiser_id": {
+            "type": "string"
+          },
+          "dataset_id": {
+            "type": "string"
+          },
+          "matchOutputTableName": {
+            "type": "string"
+          },
+          "activationFileLocation": {
+            "type": "string"
+          },
+          "executionStatus": {
+            "type": "string",
+            "example": "inprogress",
+            "enum": [
+              "inProgress",
+              "completed",
+              "denied"
+            ]
+          },
+          "activationRequestId": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
