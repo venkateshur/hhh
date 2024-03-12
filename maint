@@ -1,0 +1,101 @@
+import unittest
+from unittest.mock import MagicMock, patch
+from io import StringIO
+from your_script import *
+
+class TestGlueETL(unittest.TestCase):
+
+    @patch('your_script.getResolvedOptions')
+    @patch('your_script.boto3.client')
+    def test_main_function(self, mock_boto3_client, mock_getResolvedOptions):
+        # Mocking necessary objects
+        mock_glue_client = MagicMock()
+        mock_boto3_client.return_value = mock_glue_client
+        mock_getResolvedOptions.return_value = {
+            'JOB_NAME': 'test_job',
+            'WORKFLOW_NAME': 'test_workflow',
+            'WORKFLOW_RUN_ID': 'test_run_id',
+            'GLUE_DB': 'test_db',
+            'RAW_TABLE': 'test_table',
+            'OUTPUT_BUCKET': 'test_bucket',
+            'MAX_NO_OF_FILES': '10',
+            'SCHEDULING_TYPE': 'incremental',
+            'REQUIRED_COLUMNS': 'column1,column2',
+            'PARTITION_DATE': '20230101'
+        }
+
+        # Call the main function
+        main()
+
+        # Assert that necessary methods were called
+        mock_boto3_client.assert_called_with('glue')
+        mock_glue_client.get_workflow_run_properties.assert_called_with(Name='test_workflow', RunId='test_run_id')
+
+    @patch('your_script.getCompleteData')
+    def test_store_data_in_s3(self, mock_getCompleteData):
+        # Mocking necessary objects
+        mock_glue_context = MagicMock()
+        mock_logger = MagicMock()
+        mock_params = {
+            'MAX_NO_OF_FILES': '10',
+            'SCHEDULING_TYPE': 'incremental',
+            'PARTITION_DATE': '20230101'
+        }
+        mock_date = '20230101'
+        mock_bucket_name = 'test_bucket'
+        mock_required_fields = ['column1', 'column2']
+        mock_complete_data = MagicMock()
+        mock_complete_data.toDF.return_value.count.return_value = 10
+
+        # Call the function
+        result = storeDataInS3(mock_logger, mock_complete_data, mock_params, mock_date, 'test_path', mock_bucket_name, mock_required_fields)
+
+        # Assert that necessary methods were called
+        self.assertEqual(result, 10)
+        mock_logger.info.assert_called_with("Glue:MainJob:test_job: Data fetched with the count - 10")
+
+    @patch('your_script.boto3.client')
+    def test_purge_s3_path(self, mock_boto3_client):
+        # Mocking necessary objects
+        mock_glue_context = MagicMock()
+        mock_logger = MagicMock()
+        mock_glue_context.purge_s3_path.return_value = None
+
+        # Call the function
+        purge_s3_path(mock_logger, mock_glue_context, 'test_path')
+
+        # Assert that necessary methods were called
+        mock_glue_context.purge_s3_path.assert_called_with('test_path', options={"retentionPeriod":0})
+
+    def test_get_complete_data(self):
+        # Mocking necessary objects
+        mock_glue_context = MagicMock()
+        mock_logger = MagicMock()
+        mock_complete_data = MagicMock()
+
+        # Call the function
+        result = getCompleteData(mock_glue_context, 'test_database', 'test_table', 'test_column', 'test_transformation_ctx', mock_logger)
+
+        # Assert that necessary methods were called
+        mock_glue_context.create_dynamic_frame_from_catalog.assert_called_with(
+            database='test_database',
+            table_name='test_table',
+            transformation_ctx='test_transformation_ctx',
+        )
+        self.assertEqual(result, mock_complete_data)
+
+    def test_get_date_max(self):
+        # Mocking necessary objects
+        mock_logger = MagicMock()
+        mock_complete_data = MagicMock()
+        mock_complete_data.count.return_value = 10
+
+        # Call the function
+        result = getDate(mock_logger, 'partition_date', mock_complete_data, 'max', 'test_transformation_ctx')
+
+        # Assert that necessary methods were called
+        mock_complete_data.toDF.assert_called_once()
+        self.assertEqual(result, '20230101')
+
+if __name__ == '__main__':
+    unittest.main()
