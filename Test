@@ -1,0 +1,50 @@
+class TestCUSTOmATTPadapter(unittest.TestCase):
+    def test_cert_verify(self):
+        # Mocking necessary objects for testing
+        class MockConnection:
+            def __init__(self):
+                self.key_file = None
+
+        class MockCert:
+            def __init__(self, public_bytes=None, private_key=None):
+                self.public_bytes = public_bytes
+                self.private_key = private_key
+
+            def from_cryptography(self, cert):
+                # Assuming the certificate is returned in some format
+                return "Key file created"
+
+        # Initialize the adapter
+        adapter = CUSTOmATTPadapter()
+
+        # Prepare test data
+        mock_conn = MockConnection()
+        mock_url = "https://example.com"
+        mock_verify = True
+        mock_certa = [
+            MockCert(public_bytes="PublicBytes", private_key="PrivateKey"),
+            MockCert(),
+        ]
+
+        # Call the method under test
+        adapter.cert_verify(mock_conn, mock_url, mock_verify, mock_certa)
+
+        # Assert the key file is properly set
+        self.assertEqual(mock_conn.key_file, "Key file created")
+
+    def test_cert_verify_invalid_input(self):
+        # Initialize the adapter
+        adapter = CUSTOmATTPadapter()
+
+        # Prepare test data with invalid input
+        mock_conn = "Invalid connection"
+        mock_url = "https://example.com"
+        mock_verify = True
+        mock_certa = None  # Invalid certs data
+
+        # Call the method under test
+        # This should not raise any errors but also should not perform any action
+        adapter.cert_verify(mock_conn, mock_url, mock_verify, mock_certa)
+
+        # Assert the key file is not set (remains None)
+        self.assertIsNone(mock_conn.key_file)
