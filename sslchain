@@ -1,0 +1,34 @@
+import unittest
+from mock import MagicMock
+from your_module import CustomPyOpenSSLContext
+
+class TestCustomPyOpenSSLContext(unittest.TestCase):
+    def setUp(self):
+        self.custom_ctx = CustomPyOpenSSLContext()
+
+    def test_load_cert_chain_with_X509_and_PKey(self):
+        cert_mock = MagicMock(name='X509')
+        key_mock = MagicMock(name='PKey')
+
+        self.custom_ctx.load_cert_chain(cert_mock, keyfile=key_mock)
+
+        # Assert that use_certificate and use_privatekey methods were called
+        self.assertTrue(self.custom_ctx._ctx.use_certificate.called)
+        self.assertTrue(self.custom_ctx._ctx.use_privatekey.called)
+
+    def test_load_cert_chain_without_X509_and_PKey(self):
+        certfile = 'path/to/certfile.pem'
+        keyfile = 'path/to/keyfile.pem'
+
+        with unittest.mock.patch.object(
+            CustomPyOpenSSLContext, 'super', autospec=True
+        ) as super_mock:
+            self.custom_ctx.load_cert_chain(certfile, keyfile=keyfile)
+
+            # Assert that the parent class's method was called
+            super_mock().load_cert_chain.assert_called_once_with(
+                certfile, keyfile=keyfile, password=None
+            )
+
+if __name__ == '__main__':
+    unittest.main()
