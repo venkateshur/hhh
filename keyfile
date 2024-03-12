@@ -1,0 +1,23 @@
+import unittest
+from your_module import _is_key_file_encrypted, PKey
+from unittest.mock import MagicMock
+
+class TestIsKeyFileEncrypted(unittest.TestCase):
+    def test_key_file_is_pkey(self):
+        # If keyfile is an instance of PKey, it should return False
+        keyfile = MagicMock(name='PKey')
+        self.assertFalse(_is_key_file_encrypted(keyfile))
+
+    def test_key_file_not_pkey(self):
+        # If keyfile is not an instance of PKey, it should call original function
+        keyfile = 'path/to/keyfile.pem'
+
+        # Mocking the original function _is_key_file_encrypted.original()
+        with unittest.mock.patch(
+            'your_module._is_key_file_encrypted.original', return_value=True
+        ) as original_mock:
+            self.assertTrue(_is_key_file_encrypted(keyfile))
+            original_mock.assert_called_once_with(keyfile)
+
+if __name__ == '__main__':
+    unittest.main()
