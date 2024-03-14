@@ -1,0 +1,142 @@
+import sys
+from awsglue.utils import getResolvedOptions
+from pyspark.context import SparkContext
+from awsglue.context import GlueContext
+from awsglue.job import Job
+import boto3
+
+def main():
+    args = getResolvedOptions(sys.argv, ["JOB_NAME"])
+    sc = SparkContext()
+    glueContext = GlueContext(sc)
+    spark = glueContext.spark_session
+    job = Job(glueContext)
+    job.init(args["JOB_NAME"], args)
+    createDb()
+    createTable()
+    job.commit()
+
+
+
+
+
+
+#https://stackoverflow.com/questions/50914102/why-do-i-get-a-hive-support-is-required-to-create-hive-table-as-select-error
+
+
+#####################################
+####Rams script to create database and table
+#####################################
+def createDb():
+    print('Creating Database')
+    glue_client = boto3.client('glue')
+    create_db=glue_client.create_database(
+    
+        CatalogId='146708484811',
+        DatabaseInput={
+            'Name': 'DLLdhGlueDB'})
+    print('Created Database')
+    return create_db
+
+#####################################
+####Rams script to create database and table End
+#####################################
+
+################################
+#Working create table start
+################################
+def createTable():
+    glue_client = boto3.client('glue')
+    response = glue_client.create_table(
+        DatabaseName='DLLdhGlueDB',
+        TableInput={
+            'Name': 'dl_control_table',
+            'Description': 'Table created with boto3 API',
+            'StorageDescriptor': {
+                'Columns': [
+                    {
+                        'Name': 'sor_entity_name',
+                        'Type': 'string',
+                        'Comment': 'This column stores SOR and entity name',
+                    },
+                    {
+                        'Name': 'partition_date',
+                        'Type': 'string',
+                        'Comment': 'This is the partition date for which the data is processed',
+                    },
+                    {
+                        'Name': 'run_date',
+                        'Type': 'string',
+                        'Comment': 'This is the date when job is run',
+                    },
+                    {
+                        'Name': 'rec_count',
+                        'Type': 'string',
+                        'Comment': 'This is not as useful',
+                    },
+                    {
+                        'Name': 'run_status',
+                        'Type': 'string',
+                        'Comment': 'Status can be either load or reload (reload in case for a specific date)',
+                    },
+                    {
+                        'Name': 'Files_Transferred',
+                        'Type': 'string',
+                        'Comment': 'Flag indicating whether files are transferred to ETL',
+                    }
+                ],
+                'Location': 's3://app-id-85039-dep-id-61016-uu-id-cwbk9nbrt6yp/dl_control_table/',
+                'InputFormat': 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',
+                    'OutputFormat': 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat',
+                    'Compressed': False,
+                    
+                    'SerdeInfo': {
+                        'SerializationLibrary': 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe',
+                        'Parameters': {}
+                    },
+                    'StoredAsSubDirectories': False
+            },
+            'PartitionKeys' : [
+                {
+                'Name' : "sor_entity_name",
+                'Type' : "string"
+                },
+                {
+                'Name' : "partition_date",
+                'Type' : "string"
+                }
+            ],
+            'TableType': 'EXTERNAL_TABLE',
+                'Parameters': {
+                    'useGlueParquetWriter': 'true',
+                    'classification': 'parquet'
+                    
+                }
+        }
+    )
+
+
+    print(response)
+    return response
+#################################
+#Working create table end
+#################################
+
+
+#####################################################
+# Below is the sample code to Test insert into table
+#####################################################
+# columns = ["partition_date","entityy","status"]
+# data = [("partition_date1", "entityy1","status1")]
+
+# dfFromData2 = spark.createDataFrame(data).toDF(*columns)
+# dynamicFrame = DynamicFrame.fromDF(dfFromData2,glueContext,"dynamicFrame")
+
+# users_output = glueContext.write_dynamic_frame.from_catalog(
+#     frame=dynamicFrame,
+#     database="ldhdev",
+#     table_name="control_table2",
+#     transformation_ctx="control_table2",
+# )
+if __name__ == '__main__':
+    main()
