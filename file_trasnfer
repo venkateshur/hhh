@@ -1,0 +1,325 @@
+import os
+import boto3
+import logging
+import traceback
+import requests
+from OpenSSL.crypto import X509, PKey
+from requests import sessions
+from requests.adapters import HTTPAdapter
+from urllib3.contrib.pyopenssl import PyOpenSSLContext
+from urllib3.util import ssl_
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.x509 import load_pem_x509_certificate
+import urllib
+import sys
+from urllib.parse import unquote
+import base64
+import json
+from botocore.config import Config
+from botocore.exceptions import ClientError
+from awsglue.utils import getResolvedOptions
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
+import time
+import pandas as pd
+from pyspark.context import SparkContext
+from awsglue.context import GlueContext
+from awsglue.job import Job
+# from awsglue.transforms import *
+import datetime
+from awsglue.dynamicframe import DynamicFrame
+
+logger = logging.getLogger()
+AWS_REGION = 'us-east-1'
+job_type = ""
+entity_name = ""
+input_folder_path = ""
+mfts_rest_endpoint = ""
+cert_path = ""
+job_name = ""
+bucket = ""
+adhoc_partition_date = ""
+ctrltable_base_path = ""
+s3bucket = ""
+prefix = ""
+# global private_key_str
+private_key = None
+cert_str = ""
+partition_date = ""
+my_cert = None
+
+
+# sc = SparkContext()
+# glueContext = GlueContext(sc)
+# spark = glueContext.spark_session
+# spark.conf.set("spark.sql.sources.partitionOverwriteMode", "DYNAMIC")
+# args = getResolvedOptions(sys.argv, ['JOB_NAME', 'WORKFLOW_NAME', 'WORKFLOW_RUN_ID'])
+
+
+class CustomPyOpenSSLContext(PyOpenSSLContext):
+    def load_cert_chain(self, certfile, keyfile=None, password=None):
+        if isinstance(certfile, X509) and isinstance(keyfile, PKey):
+            self._ctx.use_certificate(certfile)
+            self._ctx.use_privatekey(keyfile)
+        else:
+            super().load_cert_chain(certfile, keyfile=keyfile, password=password)
+
+
+class CustomHTTPAdapter(HTTPAdapter):
+    def cert_verify(self, conn, url, verify, certs):
+        if certs and hasattr(certs[0], 'public_bytes') and hasattr(certs[1], 'private_bytes'):
+            conn.cert_file = X509.from_cryptography(certs[0])
+            conn.key_file = PKey.from_cryptography_key(certs[1])
+            certs = None
+        super().cert_verify(conn, url, verify, certs)
+
+
+def _is_key_file_encrypted(keyfile):
+    if isinstance(keyfile, PKey):
+        return False
+    return _is_key_file_encrypted.original(keyfile)
+
+
+class PatchRequestsUtil:
+    @staticmethod
+    def enable_string_certs():
+        if hasattr(ssl_, '_is_key_file_encrypted'):
+            _is_key_file_encrypted.original = ssl_._is_key_file_encrypted
+            ssl_._is_key_file_encrypted = _is_key_file_encrypted
+        ssl_.SSLContext = CustomPyOpenSSLContext
+        sessions.HTTPAdapter = CustomHTTPAdapter
+
+
+def get_secret(keys):
+    print(f'Getting secrets for :{keys}')
+
+    secret_config = Config(
+        connect_timeout=2,
+        read_timeout=2,
+        retries={
+            'max_attempts': 1
+        }
+    )
+    # Create a Secrets Manager client
+    session = boto3.session.Session()
+    client = session.client("secretsmanager", config=secret_config)
+    try:
+        get_secret_value_response = client.get_secret_value(
+            SecretId=keys
+        )
+
+    except ClientError as e:
+        logger.error(f'Glue:MFTSJobException: Exception while fetching secrets:: :{e.__cause__}')
+
+    else:
+        # Decrypts secret using the associated KMS CMK.
+        # Depending on whether the secret is a string or binary, one of these fields will be populated.
+        if 'SecretString' in get_secret_value_response:
+            secret = get_secret_value_response['SecretString']
+        else:
+            secret = base64.b64decode(get_secret_value_response['SecretBinary'])
+        return secret
+
+
+def updateControlTable(spark, entity_name, partition_date, file_count, run_status):
+    logger.info(f"Glue:MFTSJob:{job_name}: Updating the Control Table")
+    try:
+        cntrlTable_data = [(entity_name, partition_date, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            file_count, run_status, "true")]
+        cntrlTable_columns = (
+            "sor_entity_name", "partition_date", "run_date", "rec_count", "run_status", "Files_Transferred")
+        cntrlTable_df = spark.createDataFrame(cntrlTable_data, cntrlTable_columns)
+        logger.info(f"Glue:MFTSJob:{job_name} {cntrlTable_df.show()}")
+        cntrlTable_df.write.partitionBy("sor_entity_name", "partition_date").mode('overwrite').parquet(
+            ctrltable_base_path)
+        logger.info(f"Glue:MFTSJob:{job_name}: Updated the Control Table")
+        currCntrlTable_df = spark.read.parquet(ctrltable_base_path + "sor_entity_name=" + entity_name)
+        print(currCntrlTable_df.show(truncate=False))
+    except Exception as e:
+        logger.error(f"Glue:MFTSJobException::{job_name}: Unable to update the conrol table due to {e}")
+        raise e
+
+
+def file_transfer_mfts(filename, s3bucket, private_key, my_cert, mfts_rest_endpoint):
+    try:
+        s3_client = boto3.resource('s3')
+        logger.info(f"Glue:MFTSJob:{job_name}: Inside file_transfer_mfts function : " + filename)
+        logger.info(f"Glue:MFTSJob:{job_name}: s3bucket : " + s3bucket)
+        logger.info(f"Glue:MFTSJob:{job_name}: mfts_rest_endpoint: " + mfts_rest_endpoint)
+        obj = s3_client.Object(s3bucket, filename)
+        data = obj.get()['Body'].read()
+        logger.info(f"Glue:MFTSJob:{job_name}:Sending file {filename}")
+        # # Send file to MFTS server
+
+        response = requests.post(mfts_rest_endpoint,
+                                 files={'file': (filename, data, 'multipart/form-data')},
+                                 cert=(my_cert, private_key),
+                                 timeout=(50000, 50000))
+        # Get response from MFTS
+
+        logger.info(f"Glue:MFTSJob:{job_name}: MFTS API response for file " + filename + " : " + str(response))
+
+        if response.status_code == 200:
+            logger.info(f"Glue:MFTSJob:{job_name}: File " + filename + " Sent Successfully to MFTS")
+        else:
+            logger.error(f"Glue:MFTSJobException::{job_name}: Error in sending File " + filename + " to MFTS")
+            raise Exception("Glue:MFTS Job Exception: Error in sending File " + filename + " to MFTS")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Glue:MFTSJobException::{job_name}: Error during file transfer via MFTS API {e}")
+        raise e
+
+
+def runner():
+    logger.info(f"Glue:MFTSJob:{job_name}: ***************Inside runner function*************")
+    s3filepath = prefix + '/' + entity_name + '/output/' + str(partition_date) + '/'
+    client = boto3.client('s3', region_name='us-east-1')
+    paginator = client.get_paginator('list_objects_v2')
+    result = paginator.paginate(Bucket=s3bucket, Prefix=s3filepath)
+    PatchRequestsUtil.enable_string_certs()
+
+    try:
+        for page in result:
+            if "Contents" in page:
+                threads = []
+                with ThreadPoolExecutor(max_workers=20) as executor:
+                    for key in page["Contents"]:
+                        keyString = key["Key"]
+                        filename = keyString
+                        threads.append(executor.submit(file_transfer_mfts, filename, s3bucket, private_key, my_cert,
+                                                       mfts_rest_endpoint))
+                    for task in as_completed(threads):
+                        print(task.result())
+    except Exception as e:
+        logger.error(f"Glue:MFTSJobException::{job_name}: Error while transferring file to MFTS server {e}")
+        traceback.print_exc()
+        raise e
+
+
+def get_job_parameters():
+    args = getResolvedOptions(sys.argv, ['JOB_NAME', 'WORKFLOW_NAME', 'WORKFLOW_RUN_ID'])
+    return args
+
+def get_workflow_params(args):
+    glue_client = boto3.client("glue")
+    workflow_name = args['WORKFLOW_NAME']
+    workflow_run_id = args['WORKFLOW_RUN_ID']
+    workflow_params = glue_client.get_workflow_run_properties(Name=workflow_name, RunId=workflow_run_id)[
+        "RunProperties"]
+    return workflow_params
+
+
+# MFTS job starts here
+def main():
+    logger = logging.getLogger()
+    global job_type
+    global entity_name
+    global input_folder_path
+    global mfts_rest_endpoint
+    global cert_path
+    global job_name
+    global bucket
+    global adhoc_partition_date
+    global ctrltable_base_path
+    global s3bucket
+    global prefix
+    # global private_key_str
+    global private_key
+    global cert_str
+    global partition_date
+    global my_cert
+    jobstart = time.time()
+    # glue_client = boto3.client("glue")
+    # args = getResolvedOptions(sys.argv, ['JOB_NAME', 'WORKFLOW_NAME', 'WORKFLOW_RUN_ID'])
+    # workflow_name = args['WORKFLOW_NAME']
+    # workflow_run_id = args['WORKFLOW_RUN_ID']
+    # workflow_params = glue_client.get_workflow_run_properties(Name=workflow_name, RunId=workflow_run_id)[
+    #     "RunProperties"]
+    args = get_job_parameters()
+    logger.info(args)
+    workflow_params = get_workflow_params(args)
+    entity_name = workflow_params['RAW_TABLE']
+    input_folder_path = workflow_params['INPUT_FOLDER_PATH']
+    mfts_rest_endpoint = workflow_params['MFTS_PATH']
+    logger.info("test")
+    private_key_path = workflow_params['PRIVATE_KEY_PATH']
+    cert_path = workflow_params['CERT_PATH']
+    job_name = args['JOB_NAME']
+    bucket = workflow_params['BUCKET_NAME']
+    job_type = workflow_params['SCHEDULING_TYPE'].upper()
+
+    if job_type == "ADHOC":
+        adhoc_partition_date = workflow_params['PARTITION_DATE']
+    logger.info(
+        f"Glue:MFTSJob:Started:{job_name}: ************Start file_transfer_mfts for *************" + str(entity_name))
+    s3bucket = input_folder_path.split('/')[2]
+    prefix = (input_folder_path.split(s3bucket)[1])[1:]
+    private_key_str = get_secret(private_key_path)
+    private_key = serialization.load_pem_private_key(private_key_str.encode(), None, default_backend())
+    cert_str = get_secret(cert_path)
+    my_cert = load_pem_x509_certificate(cert_str.encode(), default_backend())
+    sc = SparkContext()
+    glueContext = GlueContext(sc)
+    spark = glueContext.spark_session
+    spark.conf.set("spark.sql.sources.partitionOverwriteMode", "DYNAMIC")
+    job = Job(glueContext)
+    job.init(job_name, args)
+    ctrltable_base_path = "s3://" + bucket + "/dl_control_table/"
+    logger.setLevel(logging.INFO)
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    logger.addHandler(console_handler)
+
+    # Read data from Control table
+    fullCntrlTableDF = spark.read.parquet(ctrltable_base_path + "sor_entity_name=" + entity_name)
+    logger.info(f"Glue:MFTSJob:{job_name}: -------------Entity Name -------- : " + entity_name)
+    if job_type == "ADHOC":
+        filteredCntrlTblDF = fullCntrlTableDF.filter(
+            (fullCntrlTableDF.run_status == "reload") & (fullCntrlTableDF.Files_Transferred == 'false') & (
+                    fullCntrlTableDF.partition_date == adhoc_partition_date))
+    else:
+        filteredCntrlTblDF = fullCntrlTableDF.filter((fullCntrlTableDF.Files_Transferred == 'false'))
+    print(filteredCntrlTblDF.show())
+    ctrlTblData = filteredCntrlTblDF.collect()
+    partition_date = 0
+    file_count = 0
+    run_status = ""
+    for row in ctrlTblData:
+        print(row)
+        start = time.time()
+        file_count = int(row['rec_count'])
+        run_status = str(row['run_status'])
+        partition_date = int(row['partition_date'])
+        logger.info(
+            f"Glue:MFTSJob:{job_name}: ***************Start file_transfer_mfts for Entity " + entity_name + " and partition date " + str(
+                partition_date))
+        runner()
+        updateControlTable(spark, entity_name, partition_date, file_count, run_status)
+        end = time.time()
+        print(
+            "**************Total time taken for the job for Entity : ************* " + entity_name + " and partition date " + str(
+                partition_date) + " is " + str(end - start) + " seconds.")
+    # Send token file, only when files for any partition are being transferred
+    if len(ctrlTblData) > 0:
+        # Transferring token file
+        client = boto3.client('s3', region_name='us-east-1')
+        paginator = client.get_paginator('list_objects_v2')
+        token_file_path = prefix + "/" + entity_name + "/"
+        tknFileresult_iterator = paginator.paginate(Bucket=s3bucket, Prefix=token_file_path)
+        for page in tknFileresult_iterator:
+            for key in page["Contents"]:
+                keyString = key["Key"]
+                if '.tkn' in keyString:
+                    logger.info(
+                        f"Glue:MFTSJob:{job_name}: **************Token file ****************** " + token_file_path)
+                    file_transfer_mfts(keyString, s3bucket, private_key, my_cert, mfts_rest_endpoint)
+
+    jobend = time.time()
+    job.commit()
+    logger.info(f"Glue:MFTSJob:{job_name}: **************Total time taken for file transfer : ************* " + str(
+        jobend - jobstart))
+    logger.info(f"Glue:MFTSJob:Ended:{job_name} for " + entity_name)
+
+
+if __name__ == "__main__":
+    main()
