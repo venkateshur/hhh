@@ -1,0 +1,560 @@
+import sys
+from awsglue.utils import getResolvedOptions
+from pyspark.context import SparkContext
+from awsglue.context import GlueContext
+from awsglue.job import Job
+from datetime import datetime, timedelta
+import datetime
+import logging
+import boto3
+from awsglue.dynamicframe import DynamicFrame
+from pyspark.sql.functions import col, to_date, max as pyspark_max
+import csv
+from io import StringIO
+
+job_name = 'dummyValueForTestScriptToExecute'
+def main():
+    global job_name
+    column_name = "partition_date"
+    files_in_s3 = 0
+    glue_client = boto3.client("glue")
+    global logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    logger.addHandler(console_handler)
+
+    args = getResolvedOptions(sys.argv, ['JOB_NAME','WORKFLOW_NAME', 'WORKFLOW_RUN_ID'])
+    workflow_name = args['WORKFLOW_NAME']
+    workflow_run_id = args['WORKFLOW_RUN_ID']
+    params = glue_client.get_workflow_run_properties(Name=workflow_name,RunId=workflow_run_id)["RunProperties"]
+
+
+    sc = SparkContext()
+    glueContext = GlueContext(sc)
+    spark = glueContext.spark_session
+    spark.conf.set("spark.sql.sources.partitionOverwriteMode", "DYNAMIC")
+    job = Job(glueContext)
+    job.init(args['JOB_NAME'], args)
+
+    runStatus = "load"
+    curr_cntrlTable_flag = False
+    db_name = params['GLUE_DB']
+    table_name = params['RAW_TABLE']
+    bucket_name = params['OUTPUT_BUCKET'].split('/')[2]
+    path = params['OUTPUT_BUCKET']
+    path1 = path + "/1"
+    path5 = path + "/5"
+    path10 = path + "/10"
+    # column_name = "partition_date"
+    sor = db_name[len(db_name)-3:len(db_name)]
+    entity_name = params['RAW_TABLE']
+    max_records = params['MAX_NO_OF_FILES']
+    job_name = args['JOB_NAME']
+    # files_in_s3 = 0
+    ctrltable_base_path = "s3://" + bucket_name + "/dl_control_table/"
+    required_fields = params["REQUIRED_COLUMNS"].split(',')
+
+
+
+    # logger = logging.getLogger()
+    # logger.setLevel(logging.INFO)
+    #
+    # console_handler = logging.StreamHandler()
+    # console_handler.setLevel(logging.INFO)
+    # logger.addHandler(console_handler)
+
+    logger.info(f"Glue:MainJob:Started:{job_name} for {db_name}:{table_name}")
+
+    # completeData = getCompleteData(glueContext,db_name,table_name,column_name,"completeData",logger)
+
+
+    
+    # #get the max partition_date available in CCB
+    # ccb_max_partition_date = getDate(logger,"partition_date",completeData,"max","ccb_max_partition_date")
+
+    #get the max partition_date from control table
+    # s3 = boto3.resource('s3')
+    # bucket = s3.Bucket(bucket_name)
+    # key = "dl_control_table/sor_entity_name=" + entity_name
+    # objs = list(bucket.objects.filter(Prefix=key))
+    # if len(objs) > 0 and objs[0].key == key:
+    #     completeControlTableData =spark.read.parquet(ctrltable_base_path + "sor_entity_name=" + entity_name )
+    #     completeControlTableDataDynamicFrame = DynamicFrame.fromDF(completeControlTableData)
+    # else:
+    #     completeControlTableData  = None
+    #     completeControlTableDataDynamicFrame = None
+    #
+    # cntrlTable_max_partition_date = getDate(logger,"partition_date",completeControlTableDataDynamicFrame,"max","cntrl_table_max_partition_date")
+    # # cntrlTable_max_partition_date = get_max_partitiondt_from_cntrltbl(bucket_name,entity_name, ctrltable_base_path, spark,logger)
+    # #get the min partition_date from control table
+    # ccb_min_partition_date = getDate(logger,"partition_date",completeData,"min","ccb_min_partition_date")
+    #
+    # #count variable for file names on s3
+    # cnt = 0
+    #
+    # #array to store the dates for the data is fetched
+    # dates_array = []
+    #
+    # skipJob = 0
+    #
+    # #knowing the dates for loading the data based on load type
+    # if(params['SCHEDULING_TYPE']=="incremental"):
+    #
+    #     start_date = datetime.datetime.strptime(str(cntrlTable_max_partition_date+1),'%Y%m%d')
+    #     if (start_date==0):
+    #         start_date = datetime.datetime.strptime(str(ccb_min_partition_date),'%Y%m%d')
+    #     end_date = datetime.datetime.strptime(str(ccb_max_partition_date),'%Y%m%d')
+    #
+    #     dates = [start_date + timedelta(days=x) for x in range((end_date-start_date).days + 1)]
+    #     str_dates = [date.strftime('%Y%m%d') for date in dates]
+    #
+    #     for date in str_dates:
+    #         dates_array.append(date)
+    #         path = path + "/" + str(date) + "/"
+    #         purge_s3_path(logger,glueContext,path)
+    #         recordCount = storeDataInS3(logger,completeData,params,date,path,bucket_name,required_fields)
+    #         if(recordCount==0):
+    #             logger.info(f"Glue:MainJob:{job_name}: No data found")
+    #         else:
+    #             renamingS3Objects(path,bucket_name,logger,entity_name,date)
+    #             updateControlTable(logger,entity_name,date,spark,params,glueContext,recordCount,"load",ctrltable_base_path)
+    #             createControlFile(logger,path,bucket_name,entity_name,spark,recordCount,date,glueContext)
+    #     createTriggerFile(logger,dates_array,path,bucket_name,entity_name)
+    #
+    # elif params['SCHEDULING_TYPE']=="snapshot":
+    #     date = ccb_max_partition_date
+    #     logger.info(f"Glue:MainJob:{job_name}: date is {date}")
+    #     skipJob2 = checkControlTable(spark,ctrltable_base_path,glueContext,entity_name,date,logger,skipJob, completeControlTableData)
+    #     logger.info(f"Glue:MainJob:{job_name}: skipJob-{skipJob2}")
+    #     if(skipJob2!=1):
+    #         dates_array.append(date)
+    #         logger.info(f"Glue:MainJob:{job_name}: Date {date}")
+    #         path = path + "/" + str(date) + "/"
+    #         purge_s3_path(logger,glueContext,path)
+    #         recordCount = storeDataInS3(logger,completeData,params,date,path,bucket_name,required_fields)
+    #         if(recordCount==0):
+    #             raise Exception("No data for this day")
+    #         renamingS3Objects(path,bucket_name,logger,entity_name,date)
+    #         updateControlTable(logger,entity_name,date,spark,params,glueContext,recordCount,"load",ctrltable_base_path)
+    #         createControlFile(logger,path,bucket_name,entity_name,spark,recordCount,date,glueContext)
+    #         createTriggerFile(logger,dates_array,path,bucket_name,entity_name)
+    #
+    # else:
+    #     adhoc_date = params['PARTITION_DATE']
+    #     date = removeLeadingZeroes(datetime.datetime(int(adhoc_date[0:4]), int(adhoc_date[4:6]), int(adhoc_date[6:8])).strftime("%Y-%m-%d"))
+    #     dates_array.append(date)
+    #     runStatus = "reload"
+    #     path = path + "/" + str(date) + "/"
+    #     purge_s3_path(logger,glueContext,path)
+    #     recordCount = storeDataInS3(logger,completeData,params,date,path,bucket_name,required_fields)
+    #     if(recordCount==0):
+    #         logger.error(f"Glue:MainJobException:{job_name}: No data found")
+    #         raise Exception("No data for this day")
+    #     renamingS3Objects(path,bucket_name,logger,entity_name,date)
+    #     updateControlTable(logger,entity_name,date,spark,params,glueContext,recordCount,runStatus,ctrltable_base_path)
+    #     createControlFile(logger,path,bucket_name,entity_name,spark,recordCount,date,glueContext)
+    #     createTriggerFile(logger, dates_array,path,bucket_name,entity_name)
+    get_entity_data(glueContext,db_name,table_name,column_name,bucket_name,entity_name,ctrltable_base_path,path,required_fields,params,spark, logger)
+    job.commit()
+    logger.info(f"Glue:MainJob:Ended for {db_name}:{table_name}")
+
+
+# get the max partition_date from control table
+# def get_max_partitiondt_from_cntrltbl(bucket_name,entity_name,ctrltable_base_path,spark,logger):
+#     s3 = boto3.resource('s3')
+#     bucket = s3.Bucket(bucket_name)
+#     key = "dl_control_table/sor_entity_name=" + entity_name
+#     objs = list(bucket.objects.filter(Prefix=key))
+#     if len(objs) > 0 and objs[0].key == key:
+#         completeControlTableData = spark.read.parquet(ctrltable_base_path + "sor_entity_name=" + entity_name )
+#         completeControlTableDataDynamicFrame = DynamicFrame.fromDF(completeControlTableData)
+#     else:
+#         completeControlTableData = None
+#         completeControlTableDataDynamicFrame = None
+#
+#     cntrlTable_max_partition_date = getDate(logger,"partition_date",completeControlTableDataDynamicFrame,"max","cntrl_table_max_partition_date")
+#     return cntrlTable_max_partition_date
+
+def is_table_empty(bucket,key):
+    client = boto3.client('s3', region_name='us-east-1')
+    paginator = client.get_paginator('list_objects_v2')
+    result = paginator.paginate(Bucket=bucket, Prefix=key)
+    table_empty = 0;
+    for page in result:
+        if "Contents" in page:
+            table_empty = 1
+    return table_empty
+
+def get_entity_data(glueContext,db_name,table_name,column_name,bucket_name,entity_name,ctrltable_base_path,path,required_fields,params,spark,logger):
+    completeData = getCompleteData(glueContext,db_name,table_name,column_name,"completeData",logger)
+    #get the max partition_date available in CCB
+    ccb_max_partition_date = getDate(logger,"partition_date",completeData,"max","ccb_max_partition_date")
+    s3 = boto3.resource('s3')
+    bucket = s3.Bucket(str(bucket_name))
+    key = "dl_control_table/sor_entity_name=" + entity_name
+
+    # client = boto3.client('s3', region_name='us-east-1')
+    # paginator = client.get_paginator('list_objects_v2')
+    # result = paginator.paginate(Bucket=bucket, Prefix=key)
+    #
+    #
+    # for page in result:
+    #     if "Contents" in page:
+
+    table_empty = is_table_empty(bucket, key)
+    if table_empty == 1:
+        completeControlTableData = spark.read.parquet(ctrltable_base_path + "sor_entity_name=" + entity_name )
+        completeControlTableDataDynamicFrame = DynamicFrame.fromDF(completeControlTableData)
+        logger.info(f"Glue:MainJob: completeControlTableData count  {completeControlTableData.count()}")
+        logger.info(f"Glue:MainJob: completeControlTableData show  {completeControlTableData.show(20)}")
+    else:
+        completeControlTableData = None
+        completeControlTableDataDynamicFrame = None
+    logger.info("successfully implemented")
+    cntrlTable_max_partition_date = getDate(logger,"partition_date",completeControlTableDataDynamicFrame,"max","cntrl_table_max_partition_date")
+    # cntrlTable_max_partition_date = get_max_partitiondt_from_cntrltbl(bucket_name,entity_name, ctrltable_base_path, spark,logger)
+    #get the min partition_date from control table
+    ccb_min_partition_date = getDate(logger,"partition_date",completeData,"min","ccb_min_partition_date")
+
+    #count variable for file names on s3
+    cnt = 0
+
+    #array to store the dates for the data is fetched
+    dates_array = []
+
+    skipJob = 0
+
+    logger.info(f"Glue:MainJob: completeData count {completeData.count()}")
+    logger.info(f"Glue:MainJob: ccb_max_partition_date  {ccb_max_partition_date}")
+    logger.info(f"Glue:MainJob: cntrlTable_max_partition_date  {cntrlTable_max_partition_date}")
+    logger.info(f"Glue:MainJob: ccb_min_partition_date  {ccb_min_partition_date}")
+
+
+    #knowing the dates for loading the data based on load type
+    if(params['SCHEDULING_TYPE']=="incremental"):
+
+        start_date = datetime.datetime.strptime(str(cntrlTable_max_partition_date+1),'%Y%m%d')
+        if (start_date==0):
+            start_date = datetime.datetime.strptime(str(ccb_min_partition_date),'%Y%m%d')
+        end_date = datetime.datetime.strptime(str(ccb_max_partition_date),'%Y%m%d')
+
+        dates = [start_date + timedelta(days=x) for x in range((end_date-start_date).days + 1)]
+        str_dates = [date.strftime('%Y%m%d') for date in dates]
+
+        for date in str_dates:
+            dates_array.append(date)
+            path = path + "/" + str(date) + "/"
+            purge_s3_path(logger,glueContext,path)
+            recordCount = storeDataInS3(logger,completeData,params,date,path,bucket_name,required_fields)
+            if(recordCount==0):
+                logger.info(f"Glue:MainJob:{job_name}: No data found")
+            else:
+                renamingS3Objects(path,bucket_name,logger,entity_name,date)
+                updateControlTable(logger,entity_name,date,spark,params,glueContext,recordCount,"load",ctrltable_base_path)
+                createControlFile(logger,path,bucket_name,entity_name,spark,recordCount,date,glueContext)
+        createTriggerFile(logger,dates_array,path,bucket_name,entity_name)
+
+    elif params['SCHEDULING_TYPE']=="snapshot":
+        date = ccb_max_partition_date
+        logger.info(f"Glue:MainJob:{job_name}: date is {date}")
+        skipJob2 = checkControlTable(spark,ctrltable_base_path,glueContext,entity_name,date,logger,skipJob, completeControlTableData)
+        logger.info(f"Glue:MainJob:{job_name}: skipJob-{skipJob2}")
+        if(skipJob2!=1):
+            dates_array.append(date)
+            logger.info(f"Glue:MainJob:{job_name}: Date {date}")
+            path = path + "/" + str(date) + "/"
+            purge_s3_path(logger,glueContext,path)
+            recordCount = storeDataInS3(logger,completeData,params,date,path,bucket_name,required_fields)
+            if(recordCount==0):
+                raise Exception("No data for this day")
+            renamingS3Objects(path,bucket_name,logger,entity_name,date)
+            updateControlTable(logger,entity_name,date,spark,params,glueContext,recordCount,"load",ctrltable_base_path)
+            createControlFile(logger,path,bucket_name,entity_name,spark,recordCount,date,glueContext)
+            createTriggerFile(logger,dates_array,path,bucket_name,entity_name)
+
+    else:
+        adhoc_date = params['PARTITION_DATE']
+        date = removeLeadingZeroes(datetime.datetime(int(adhoc_date[0:4]), int(adhoc_date[4:6]), int(adhoc_date[6:8])).strftime("%Y-%m-%d"))
+        dates_array.append(date)
+        runStatus = "reload"
+        path = path + "/" + str(date) + "/"
+        purge_s3_path(logger,glueContext,path)
+        recordCount = storeDataInS3(logger,completeData,params,date,path,bucket_name,required_fields)
+        if(recordCount==0):
+            logger.error(f"Glue:MainJobException:{job_name}: No data found")
+            raise Exception("No data for this day")
+        renamingS3Objects(path,bucket_name,logger,entity_name,date)
+        updateControlTable(logger,entity_name,date,spark,params,glueContext,recordCount,runStatus,ctrltable_base_path)
+        createControlFile(logger,path,bucket_name,entity_name,spark,recordCount,date,glueContext)
+        createTriggerFile(logger, dates_array,path,bucket_name,entity_name)
+def checkControlTable(spark,ctrltable_base_path,glueContext,entity_name,date,logger,skipJob, completeControlTableData):
+
+    try:
+        logger.info(f"Glue:MainJob: Inside checkControlTable ")
+        fullCntrlTableDF = completeControlTableData #spark.read.parquet(ctrltable_base_path + "sor_entity_name=" + entity_name )
+        # currCntrlTable_ddf =  glueContext.create_dynamic_frame_from_catalog(
+        #     database="DLLdhGlueDB",
+        #     table_name="dl_control_table",
+        #     transformation_ctx="CntrlTable"
+        # )
+        
+        # currCntrlTable_df = currCntrlTable_ddf.toDF()
+        logger.info(f"fullCntrlTableDF {fullCntrlTableDF.show(20)}")
+        if(fullCntrlTableDF != None and fullCntrlTableDF.count()>0):
+            logger.info(f"Glue:MainJob: checkControlTable not null fullCntrlTableDF")
+            filteredCntrlTableDF = fullCntrlTableDF.filter(
+                # (fullCntrlTableDF.sor_entity_name == entity_name) &
+                (fullCntrlTableDF.partition_date == date)
+            )
+
+            tableCount = filteredCntrlTableDF.count()
+            logger.info(f"Glue:MainJob:{job_name}: control table count-{tableCount}")
+            logger.info(f"Glue:MainJob:{job_name}: {filteredCntrlTableDF.show(20)}")
+            ctrlTblData = filteredCntrlTableDF.collect()
+            # logger.info(currCntrlTable_df.collect()[0][3])
+    
+            if(tableCount>0):
+                skipJob = 1
+
+                if(filteredCntrlTableDF.files_transferred == "false"):
+                    logger.error(f"Glue:MainJobException:{job_name}: Data already fetched. Marking job as Succeeded")
+                else:
+                    raise Exception("Data already transferred to ETL server")
+
+        return skipJob
+
+    except Exception as e:
+        logging.exception(f"Glue:MainJobException:{job_name}: Exception encountered: {e} ")
+
+
+
+
+
+def removeLeadingZeroes(dateStr):
+    dateList = dateStr.split("-")
+    resStr = ""
+    for d in dateList:
+        #        d = d.lstrip('0')
+        resStr += d
+    return resStr
+
+def storeDataInS3(logger,complete_data,params,date,path,bucket_name,requiredFields):
+    try:
+        logger.info(f'Glue:MainJobException:{job_name}: Data fetching started')
+
+        print("Schema for complete_data DynamicFrame before filtering with required fields:")
+        complete_data.printSchema()
+
+        complete_data = complete_data.toDF()
+        complete_data = complete_data[requiredFields]
+
+        print("Schema for complete_data DynamicFrame after filtering")
+        complete_data.printSchema()
+
+        complete_data = complete_data.where(complete_data.PARTITION_DATE==date)
+
+        count = complete_data.count()
+        logger.info(f"Glue:MainJob:{job_name}: Data fetched with the count - " + str(count))
+
+        if count > 0:
+
+            # catalog_data_df = catalog_data.toDF()
+            logger.info(f"Glue:MainJob:{job_name}: no of repartitions {complete_data.rdd.getNumPartitions()}")
+
+            complete_data.coalesce(int(params['MAX_NO_OF_FILES'])).write.parquet(path)
+            logger.info(f"Glue:MainJob:{job_name}: Data stored in s3")
+
+            s3 = boto3.client('s3')
+            response = s3.list_objects_v2(Bucket=bucket_name, Prefix=path)
+
+        return count
+    
+    except Exception as e:
+        logger.error(f'Glue:MainJobException:{job_name}: Unable to fetch the data from datalake due to {e}')
+        raise e
+    
+
+def purge_s3_path(logger,glueContext,path):
+    try:
+        logger.info(f"Glue:MainJob:{job_name}: Cleaning the s3 path")
+        glueContext.purge_s3_path(path, options={"retentionPeriod":0})
+    except Exception as e:
+        logger.error(f'Glue:MainJobException:{job_name}: Unable to clean the s3 path due to {e}')
+        raise e
+
+def getCompleteData(glueContext,database,table_name,column_name,transformation_ctx,logger):
+    try:
+        completeData = glueContext.create_dynamic_frame_from_catalog(
+            database=database,
+            table_name=table_name,
+            transformation_ctx=transformation_ctx,
+        )
+        return completeData
+
+    except Exception as e:
+        logger.error(f"Glue:MainJobException:{job_name}: Exception Encountered: {e}")
+        raise e
+
+
+def getDate(logger,column_name,completeData,minOrMax,transformation_ctx):
+    try:
+        catalog_data = completeData
+        if(catalog_data == None):
+            return 0
+        else:
+            count = catalog_data.count()
+            logger.info(f"Glue:MainJob:{job_name}: complete data count: {count}")
+
+            if(count!=0):
+                catalog_data = catalog_data.toDF()
+                # logger.info(f"count2: {catalog_data.count()}")
+                catalog_data = catalog_data.withColumn(column_name, col(column_name).cast('Integer'))
+                if(minOrMax =='min'):
+                    min_partition_date = catalog_data.groupby().min(column_name).collect()[0].asDict()[f'min({column_name})']
+                    logger.info(f"Glue:MainJob:{job_name}: minimum date is {min_partition_date}")
+                    return min_partition_date
+                else:
+                    max_partition_date = catalog_data.groupby().max(column_name).collect()[0].asDict()[f'max({column_name})']
+                    logger.info(f"Glue:MainJob:{job_name}: maximum date is {max_partition_date}")
+                    return max_partition_date
+
+            else:
+                return 0
+
+    except Exception as e:
+        logger.error(f"Glue:MainJobException:{job_name}: Exception encountered {e}")
+        raise e
+
+def renamingS3Objects(path,bucket_name,logger,entity_name,date):
+    try:
+
+        s3 = boto3.client('s3')
+        catalogData_path = '/'.join(path.split('/')[3:])
+
+        paginator  = s3.get_paginator('list_objects_v2')
+        page_iterator = paginator.paginate(Bucket=bucket_name, Prefix=catalogData_path)
+        cnt = 0
+
+        for page in page_iterator:
+            if 'Contents' in page:
+                for obj in page['Contents']:
+                    old_key = obj['Key']
+                    new_key = '/'.join(catalogData_path.split('/')[0:-1]) + "/" + f"{entity_name}-{date}-{cnt}.parquet"
+                    cnt = cnt+1
+
+                    #Copy object to a new name
+                    s3.copy_object(
+                        Bucket=bucket_name,
+                        CopySource={'Bucket': bucket_name, 'Key': old_key},
+                        Key=new_key
+                    )
+
+                    #Delete the old object
+                    s3.delete_object(Bucket=bucket_name, Key=old_key)
+
+            else:
+                logger.info(f"Glue:MainJob:{job_name}: {cnt}")
+                logger.info(f"Glue:MainJob:{job_name}: No catalog data files found")
+    
+    except Exception as e:
+        logger.error("Glue:MainJobException:{job_name}: Unable to rename S3 files due to {e}")
+        raise e
+
+
+def updateControlTable(logger,entity_name,date,spark,params,glueContext,recordCount,runStatus,ctrltable_base_path):
+    logger.info(f"Glue:MainJob:{job_name}: Updating the Control Table")
+
+    try:
+        logger.info(f"Total count of records is {recordCount}")
+        cntrlTable_data = [(entity_name, date, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), recordCount, runStatus, "false")]
+        cntrlTable_columns = ("sor_entity_name", "partition_date", "run_date", "rec_count", "run_status", "Files_Transferred")
+        cntrlTable_df = spark.createDataFrame(cntrlTable_data,cntrlTable_columns)
+        cntrlTable_df.write.partitionBy("sor_entity_name","partition_date").mode('overwrite').parquet(ctrltable_base_path)
+        logger.info(f"Glue:MainJob:{job_name}: Updated the Control Table")
+
+        # fetch the current control table
+        currCntrlTable_df = spark.read.parquet(ctrltable_base_path + "sor_entity_name=" + entity_name )
+        print(currCntrlTable_df.show(truncate=False))
+
+    except Exception as e:
+        logger.error(f"Glue:MainJobException:{job_name}: Unable to update the conrol table due to {e}")
+        raise e
+
+
+def createControlFile(logger,path,bucket_name,entity_name,spark,recordCount,date,glueContext):
+    logger.info(f"Glue:MainJob:{job_name}: Creating the Control File")
+    try:
+        controlFile_folder = path
+        controlFile_path = controlFile_folder + "cntrlFile_" + f"{entity_name}_{date}.csv"
+        noOfFiles = len(spark.sparkContext.wholeTextFiles(path).map(lambda x: x[0]).collect())
+        logger.info(f"Glue:MainJob:{job_name}: no of files are: {noOfFiles}")
+        cntrlFile_data = [(noOfFiles,recordCount,date)]
+        cntrlFile_columns = ("noOfFiles", "noOfRecords", "PartitionDate")
+        logger.info(f"Glue:MainJob:{job_name}: variables defined")
+        controlFile_df = spark.createDataFrame(cntrlFile_data,cntrlFile_columns)
+        logger.info(f"Glue:MainJob:{job_name}: dataframe created")
+        controlFile_Ddf = DynamicFrame.fromDF(controlFile_df, glueContext, "dynamic_frame")
+        logger.info(f"Glue:MainJob:{job_name}: dynamic frame created")
+        logger.info(f"Glue:MainJob:{job_name}: {controlFile_Ddf.show(20)}")
+
+        repartitioned_controlFile_Ddf = controlFile_Ddf.repartition(1)
+        glueContext.write_dynamic_frame_from_options(
+            frame = repartitioned_controlFile_Ddf,
+            connection_type = "s3",
+            connection_options = {"path": controlFile_path},
+            format = "csv"
+        )
+
+
+        s3 = boto3.client('s3')
+        controlFile_path2 = controlFile_path + "/"
+        prefix_path = '/'.join(controlFile_path2.split('/')[3:])
+        catalogData_path = '/'.join(path.split('/')[3:])
+        response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix_path)
+
+        if 'Contents' in response:
+            for obj in response['Contents']:
+                old_key = obj['Key']
+        else:
+            old_key = ""
+        new_key = '/'.join(catalogData_path.split('/')[0:-1]) + "/" + f"cntrlFile_{entity_name}_{date}.csv"
+
+        #Copy object to a new name
+        s3.copy_object(
+            Bucket=bucket_name,
+            CopySource={'Bucket': bucket_name, 'Key': old_key},
+            Key=new_key
+        )
+
+        #Delete the old object
+        s3.delete_object(Bucket=bucket_name, Key=old_key)
+
+        logger.info(f"Glue:MainJob:{job_name}: control file created")
+
+    except Exception as e:
+        logger.error(f"Glue:MainJobException:{job_name}: Unable to create the control file due to {e}")
+        raise e
+
+
+def createTriggerFile(logger,dates_array,path,bucket_name,entity_name):
+    try:
+
+        trigger_data = dates_array
+        csv_buffer = StringIO()
+        csv_writer = csv.writer(csv_buffer)
+        for integer in trigger_data:
+            csv_writer.writerow([integer])
+        s3 = boto3.client('s3')
+        triggerFile_path = '/'.join(path.split('/')[3:-3])
+        s3.put_object(Bucket=bucket_name, Key=triggerFile_path+f"/{entity_name}_tokenFile.tkn", Body=csv_buffer.getvalue())
+        logger.info(f"Glue:MainJob:{job_name}: Trigger File created")
+    
+    except Exception as e:
+        logger.info(f"Glue:MainJobException:{job_name}: Unable to create the trigger file due to {e}")
+        raise e
+
+if __name__ == '__main__':
+    main()
