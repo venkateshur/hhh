@@ -1,0 +1,33 @@
+# Mocking the getResolvedOptions function
+@patch('your_module.getResolvedOptions')
+def test_get_job_parameters(mock_getResolvedOptions):
+    # Mocking the return value of getResolvedOptions
+    expected_args = {'JOB_NAME': 'test_job', 'WORKFLOW_NAME': 'test_workflow', 'WORKFLOW_RUN_ID': '12345'}
+    mock_getResolvedOptions.return_value = expected_args
+
+    # Call the function
+    result = get_job_parameters()
+
+    # Assertions
+    assert result == expected_args
+    mock_getResolvedOptions.assert_called_once_with(['JOB_NAME', 'WORKFLOW_NAME', 'WORKFLOW_RUN_ID'], sys.argv)
+
+# Mocking boto3.client and glue_client.get_workflow_run_properties
+@patch('boto3.client')
+def test_get_workflow_params(mock_boto3_client):
+    # Mocking the return value of get_workflow_run_properties
+    expected_workflow_params = {'RAW_TABLE': 'test_table', 'INPUT_FOLDER_PATH': 'test_folder', ...}
+    mock_glue_client = MagicMock()
+    mock_glue_client.get_workflow_run_properties.return_value = {"RunProperties": expected_workflow_params}
+    mock_boto3_client.return_value = mock_glue_client
+
+    # Dummy arguments
+    args = {'WORKFLOW_NAME': 'test_workflow', 'WORKFLOW_RUN_ID': '12345'}
+
+    # Call the function
+    result = get_workflow_params(args)
+
+    # Assertions
+    assert result == expected_workflow_params
+    mock_boto3_client.assert_called_once_with('glue')
+    mock_glue_client.get_workflow_run_properties.assert_called_once_with(Name='test_workflow', RunId='12345')
