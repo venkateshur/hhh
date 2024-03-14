@@ -1,0 +1,31 @@
+import boto3
+from moto import mock_glue
+import pytest
+from your_module import createDb, createTable
+
+# Define a fixture to mock the Glue client
+@pytest.fixture
+def glue_client():
+    with mock_glue():
+        yield boto3.client('glue')
+
+# Test case for createDb function
+def test_create_db(glue_client):
+    response = createDb()
+    assert 'Database' in response
+    assert response['Database']['Name'] == 'DLLdhGlueDB'
+
+# Test case for createTable function
+def test_create_table(glue_client):
+    response = createTable()
+    assert 'Table' in response
+    assert response['Table']['Name'] == 'dl_control_table'
+    assert response['Table']['DatabaseName'] == 'DLLdhGlueDB'
+
+# Example of a test case for createTable function with invalid input
+def test_create_table_invalid_input(glue_client):
+    # Simulate invalid input by providing an empty dictionary
+    with pytest.raises(Exception):
+        createTable({})
+
+# Add more test cases as needed
