@@ -1,0 +1,104 @@
+import unittest
+from unittest.mock import MagicMock
+from unittest.mock import patch
+from io import StringIO
+from datetime import datetime, timedelta
+from script import *
+
+
+class TestScriptMethods(unittest.TestCase):
+
+    def test_is_table_empty(self):
+        # Mock boto3 client
+        s3_client = MagicMock()
+        paginator = MagicMock()
+        s3_client.get_paginator.return_value = paginator
+        paginator.paginate.return_value = [{'Contents': [{'Key': 'test_key'}]}]
+
+        # Test when table is not empty
+        table_empty = is_table_empty("test_bucket", "test_key")
+        self.assertEqual(table_empty, 1)
+
+        # Test when table is empty
+        paginator.paginate.return_value = [{}]
+        table_empty = is_table_empty("test_bucket", "test_key")
+        self.assertEqual(table_empty, 0)
+
+    @patch('script.boto3.client')
+    def test_storeDataInS3(self, mock_boto3_client):
+        mock_logger = MagicMock()
+        mock_glueContext = MagicMock()
+        mock_complete_data = MagicMock()
+        mock_params = {'MAX_NO_OF_FILES': '10'}
+        mock_date = "20220301"
+        mock_path = "s3://test_bucket/test_path/"
+        mock_bucket_name = "test_bucket"
+        mock_required_fields = ['field1', 'field2']
+        mock_recordCount = 5
+
+        # Test when count > 0
+        storeDataInS3(mock_logger, mock_complete_data, mock_params, mock_date, mock_path, mock_bucket_name, mock_required_fields)
+        mock_complete_data.toDF.assert_called_once()
+        mock_complete_data.toDF.return_value = MagicMock()
+        mock_complete_data.toDF.return_value.count.return_value = mock_recordCount
+        mock_complete_data.toDF.return_value.where.return_value = MagicMock()
+        mock_complete_data.toDF.return_value.where.return_value.count.return_value = mock_recordCount
+        mock_complete_data.toDF.return_value.coalesce.return_value = MagicMock()
+        mock_complete_data.toDF.return_value.coalesce.return_value.write.parquet.assert_called_once_with(mock_path)
+
+        # Test when count == 0
+        mock_recordCount = 0
+        with self.assertRaises(Exception):
+            storeDataInS3(mock_logger, mock_complete_data, mock_params, mock_date, mock_path, mock_bucket_name, mock_required_fields)
+
+    @patch('script.GlueContext')
+    def test_purge_s3_path(self, mock_glueContext):
+        mock_logger = MagicMock()
+        mock_glueContext_instance = MagicMock()
+        mock_glueContext.return_value = mock_glueContext_instance
+        mock_path = "s3://test_bucket/test_path/"
+
+        # Test when purge_s3_path is called
+        purge_s3_path(mock_logger, mock_glueContext, mock_path)
+        mock_glueContext_instance.purge_s3_path.assert_called_once_with(mock_path, options={"retentionPeriod": 0})
+
+    @patch('script.GlueContext')
+    def test_getCompleteData(self, mock_glueContext):
+        mock_logger = MagicMock()
+        mock_glueContext_instance = MagicMock()
+        mock_glueContext.return_value = mock_glueContext_instance
+        mock_database = "test_database"
+        mock_table_name = "test_table"
+        mock_column_name = "test_column"
+        mock_transformation_ctx = "test_transformation_ctx"
+        mock_dynamic_frame = MagicMock()
+
+        # Test when getCompleteData is called
+        getCompleteData(mock_glueContext, mock_database, mock_table_name, mock_column_name, mock_transformation_ctx, mock_logger)
+        mock_glueContext_instance.create_dynamic_frame_from_catalog.assert_called_once_with(database=mock_database,
+                                                                                            table_name=mock_table_name,
+                                                                                            transformation_ctx=mock_transformation_ctx)
+
+    def test_getDate(self):
+        mock_logger = MagicMock()
+        mock_completeData = MagicMock()
+        mock_column_name = "test_column"
+        mock_minOrMax = "min"
+
+        # Test when count > 0
+        mock_completeData.toDF.return_value = MagicMock()
+        mock_completeData.toDF.return_value.count.return_value = 1
+        mock_completeData.toDF.return_value.groupby.return_value.min.return_value.collect.return_value = [({'min(test_column)': '20220301'})]
+        result = getDate(mock_logger, mock_column_name, mock_completeData, mock_minOrMax, "test_transformation_ctx")
+        self.assertEqual(result, '20220301')
+
+        # Test when count == 0
+        mock_completeData.toDF.return_value.count.return_value = 0
+        result = getDate(mock_logger, mock_column_name, mock_completeData, mock_minOrMax, "test_transformation_ctx")
+        self.assertEqual(result, 0)
+
+    # Write tests for other methods similarly
+
+
+if __name__ == '__main__':
+    unittest.main()
