@@ -1,0 +1,44 @@
+import boto3
+import pytest
+from unittest.mock import patch
+from your_module import createDb, createTable
+
+# Test case for createDb function
+@patch('boto3.client')
+def test_create_db(mock_boto_client):
+    mock_glue_client = mock_boto_client.return_value
+    mock_glue_client.create_database.return_value = {
+        'Database': {'Name': 'DLLdhGlueDB'}
+    }
+
+    response = createDb()
+    assert 'Database' in response
+    assert response['Database']['Name'] == 'DLLdhGlueDB'
+
+# Test case for createTable function
+@patch('boto3.client')
+def test_create_table(mock_boto_client):
+    mock_glue_client = mock_boto_client.return_value
+    mock_glue_client.create_table.return_value = {
+        'Table': {
+            'Name': 'dl_control_table',
+            'DatabaseName': 'DLLdhGlueDB'
+        }
+    }
+
+    response = createTable()
+    assert 'Table' in response
+    assert response['Table']['Name'] == 'dl_control_table'
+    assert response['Table']['DatabaseName'] == 'DLLdhGlueDB'
+
+# Example of a test case for createTable function with invalid input
+@patch('boto3.client')
+def test_create_table_invalid_input(mock_boto_client):
+    mock_glue_client = mock_boto_client.return_value
+    # Simulate invalid input by providing an empty dictionary
+    mock_glue_client.create_table.side_effect = Exception('Invalid input')
+
+    with pytest.raises(Exception):
+        createTable()
+
+# Add more test cases as needed
