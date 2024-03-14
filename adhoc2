@@ -1,0 +1,42 @@
+import unittest
+from unittest.mock import patch, MagicMock
+from your_script_name import is_table_empty, get_entity_data
+
+class TestGlueScript(unittest.TestCase):
+
+    @patch('your_script_name.boto3.client')
+    def test_is_table_empty_with_contents(self, mock_boto3_client):
+        # Mock the S3 client and its methods
+        mock_paginator = MagicMock()
+        mock_paginator.paginate.return_value = [{'Contents': [{}]}]
+        mock_boto3_client.return_value.get_paginator.return_value = mock_paginator
+
+        # Call the function
+        result = is_table_empty('test_bucket', 'test_key')
+
+        # Assert the result
+        self.assertEqual(result, 1)
+
+    @patch('your_script_name.boto3.resource')
+    @patch('your_script_name.DynamicFrame')
+    def test_get_entity_data_with_non_empty_table(self, mock_dynamic_frame, mock_boto3_resource):
+        # Mock the necessary dependencies
+        mock_glue_context = MagicMock()
+        mock_spark = MagicMock()
+        mock_logger = MagicMock()
+        mock_bucket = MagicMock()
+        mock_bucket.Bucket.return_value = mock_bucket
+        mock_bucket_prefix = MagicMock()
+        mock_bucket_prefix.return_value = [{'Contents': [{}]}]
+        mock_bucket.paginate.return_value = mock_bucket_prefix
+        mock_boto3_resource.return_value = mock_bucket
+        mock_spark.read.parquet.return_value.count.return_value = 10
+
+        # Call the function
+        get_entity_data(mock_glue_context, 'test_db', 'test_table', 'partition_date', 'test_bucket', 'test_entity', 'test_ctrltable_base_path', 'test_path', ['required', 'fields'], {'SCHEDULING_TYPE': 'incremental'}, mock_spark, mock_logger)
+
+        # Assert the expected behavior
+        mock_logger.info.assert_called_with('Glue:MainJob: completeControlTableData count  10')
+
+if __name__ == '__main__':
+    unittest.main()
