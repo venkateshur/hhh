@@ -1,0 +1,2 @@
+commands
+aws glue list-jobs | jq -r '.Jobs[] | select(.LastModifiedOn | startswith("'"$(date +"%Y-%m-%d")"'")) | .Name'
