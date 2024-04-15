@@ -4,5 +4,4 @@ aws glue list-jobs | jq -r '.Jobs[] | select(.LastModifiedOn | startswith("'"$(d
 current_date=$(date +"%Y-%m-%d")
 
 # List Glue jobs and filter the output using awk
-aws glue list-jobs --output json | \
-    awk -v current_date="$current_date" '/"LastModifiedOn"/ && $2 ~ current_date {getline; getline; print $2}'
+aws glue list-jobs --output json | awk -v current_date="$current_date" '/"LastModifiedOn"/ && $2 ~ current_date {getline; getline; print $2}'
