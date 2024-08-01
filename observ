@@ -1,0 +1,3 @@
+iceberg_config	table_name	job_type	execution_time	input_data_size	number_of_updates	number_of_inserts	job_configuration	partition_strategy	observations
+Config1	table1	Glue	2 hours	100GB	1000	200	ConfigA	Strategy1	No issues
+Config2	table2	EMR	3 hours	150GB	1500	300	ConfigB	Strategy2	Minor delays
