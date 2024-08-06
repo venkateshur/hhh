@@ -145,6 +145,46 @@ def str2bool(v):
     return v.lower() != "false"
 
 
+def run_copy_command_parquet(redshift_endpoint, database, user, password, s3_path, iam_role_arn, table_name):
+    try:
+        # Connect to Redshift
+        conn = psycopg2.connect(
+            dbname=database,
+            user=user,
+            password=password,
+            host=redshift_endpoint,
+            port='5439'
+        )
+        conn.autocommit = True
+        cur = conn.cursor()
+
+        # Define the COPY command for Parquet
+        copy_command = sql.SQL("""
+            COPY {table}
+            FROM {s3_path}
+            IAM_ROLE {iam_role}
+            FORMAT AS PARQUET
+            MAXERROR 100;
+        """).format(
+            table=sql.Identifier(table_name),
+            s3_path=sql.Literal(s3_path),
+            iam_role=sql.Literal(iam_role_arn)
+        )
+
+        # Execute the COPY command
+        cur.execute(copy_command)
+        print(f"Data loaded into {table_name} from {s3_path} successfully.")
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(f"Error: {error}")
+    except (NoCredentialsError, PartialCredentialsError) as aws_error:
+        print(f"AWS Credentials Error: {aws_error}")
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
